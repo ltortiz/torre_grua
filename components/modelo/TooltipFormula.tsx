@@ -12,7 +12,7 @@ export default function TooltipFormula({ latex }: Props) {
   return (<Tooltip.Provider delayDuration={200}>
     <Tooltip.Root>
       <Tooltip.Trigger asChild>
-        <button className="w-4 h-4 flex items-center justify-center rounded-full bg-gray-500 text-white text-[10px] font-bold">
+        <button className="w-5 md:w-4 h-4 flex items-center justify-center rounded-full bg-gray-500 text-white text-[10px] font-bold">
           i
         </button>
       </Tooltip.Trigger>

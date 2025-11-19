@@ -878,7 +878,7 @@ export default function ModeloMatematicoPage() {
                 </div>
                 {form.f !== null && form.v !== null && form.pIn !== null && form.pOut !== null && form.n !== null && (
                   <div className="pl-4 pt-2 pb-2 pr-4 bg-gray-100 border rounded">
-                    <div className="flex justify-between items-center mb-2">
+                    <div className="flex justify-between items-center mb-2 text-gray-800">
                       <b>Resultados:</b>
                     </div>
                     <ul className="list-decimal list-outside pl-4 text-gray-700">
