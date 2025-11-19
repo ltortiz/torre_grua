@@ -14,7 +14,7 @@ export default function Navbar() {
     { name: "Fundamento", href: "/fundamento" },
     { name: "Modelo Matemático", href: "/modelo" },
     { name: "Diseño", href: "/diseno" },
-    { name: "NPI", href: "/npi" },
+    // { name: "NPI", href: "/npi" },
   ];
 
   return (
@@ -42,8 +42,8 @@ export default function Navbar() {
                 key={item.name}
                 href={item.href}
                 className={`transition font-medium ${pathname === item.href
-                    ? "text-white border-b-2 border-blue-400 pb-1"
-                    : "text-gray-300 hover:text-white"
+                  ? "text-white border-b-2 border-blue-400 pb-1"
+                  : "text-gray-300 hover:text-white"
                   }`}
               >
                 {item.name}
@@ -62,8 +62,8 @@ export default function Navbar() {
               href={item.href}
               onClick={() => setOpen(false)}
               className={`block px-4 py-2 font-medium ${pathname === item.href
-                  ? "text-white bg-gray-600"
-                  : "text-gray-300 hover:bg-gray-600 hover:text-white"
+                ? "text-white bg-gray-600"
+                : "text-gray-300 hover:bg-gray-600 hover:text-white"
                 }`}
             >
               {item.name}
