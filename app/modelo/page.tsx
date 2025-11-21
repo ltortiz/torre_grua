@@ -3,9 +3,10 @@ import { useState } from "react";
 import { BlockMath, InlineMath } from "react-katex";
 import Formula from "@/components/modelo/Formula";
 import TooltipFormula from "@/components/modelo/TooltipFormula";
-import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, CartesianGrid, Legend, Line, LineChart, Tooltip, XAxis, YAxis } from 'recharts';
+import Alerta from "@/components/Alerta";
 
-type Formulario = {
+type Experimental = {
   masa: string;
   tension: string;
   corriente: string;
@@ -16,13 +17,45 @@ type Formulario = {
   pOut: string | null;
   n: string | null;
   mostrar: string | null;
+  no: string;
 };
+interface Teorico {
+  g: number;
+  kg: number;
+  f: number;
+  wm: number;
+  p_out: number;
+  tau_t: number;
+  tau_m: number;
+  p_in_30: number;
+  p_in: number;
+  n: number;
+}
+interface Resultado {
+  masa: number;
+  nT?: number;
+  pInT?: number;
+  pOutT?: number;
+  nE?: number;
+  pInE?: number;
+  pOutE?: number;
+  color?: string;
+  escenario?: number;
+}
+
+type AlertaType = {
+  mensaje: string;
+  tipo: "error" | "success" | "info";
+  id: number;
+};
+
 
 export default function ModeloMatematicoPage() {
   const [tab, setTab] = useState(1);
+  const [tabChart, setTabChart] = useState(1);
   const [decimals] = useState(3);
   const [gravedad] = useState(9.81);
-  const [altura] = useState(0.5);
+  const [altura] = useState(0.4);
   const [R] = useState(4.5);
   const [vnm] = useState(300);
   const [rt] = useState(0.02);
@@ -34,7 +67,7 @@ export default function ModeloMatematicoPage() {
   const [wt, setWt] = useState(0);
   const [v, setV] = useState(0);
   const [pIn, setPIn] = useState(0);
-  const [masas, setMasas] = useState([{
+  const [masas, setMasas] = useState<Teorico[]>([{
     g: 100,
     kg: 0.1,
     f: 0,
@@ -43,7 +76,8 @@ export default function ModeloMatematicoPage() {
     tau_t: 0,
     tau_m: 0,
     p_in_30: 0,
-    p_in: 0
+    p_in: 0,
+    n: 0
   }, {
     g: 200,
     kg: 0.2,
@@ -53,7 +87,8 @@ export default function ModeloMatematicoPage() {
     tau_t: 0,
     tau_m: 0,
     p_in_30: 0,
-    p_in: 0
+    p_in: 0,
+    n: 0
   }, {
     g: 300,
     kg: 0.3,
@@ -63,17 +98,23 @@ export default function ModeloMatematicoPage() {
     tau_t: 0,
     tau_m: 0,
     p_in_30: 0,
-    p_in: 0
+    p_in: 0,
+    n: 0
   }]);
-  const [formularios, setFormularios] = useState<Formulario[]>([
-    { masa: "", tension: "", corriente: "", tiempo: "", f: null, v: null, pIn: null, pOut: null, n: null, mostrar: null },
-    { masa: "", tension: "", corriente: "", tiempo: "", f: null, v: null, pIn: null, pOut: null, n: null, mostrar: null },
-    { masa: "", tension: "", corriente: "", tiempo: "", f: null, v: null, pIn: null, pOut: null, n: null, mostrar: null },
+  const [formularios, setFormularios] = useState<Experimental[]>([
+    // { masa: "0.1", tension: "8.9", corriente: "0.18", tiempo: "3.1", f: null, v: null, pIn: null, pOut: null, n: null, mostrar: null },
+    // { masa: "0.2", tension: "8.8", corriente: "0.26", tiempo: "3.9", f: null, v: null, pIn: null, pOut: null, n: null, mostrar: null },
+    // { masa: "0.3", tension: "8.7", corriente: "0.34", tiempo: "4.7", f: null, v: null, pIn: null, pOut: null, n: null, mostrar: null },
+    { no: "1", masa: "", tension: "", corriente: "", tiempo: "", f: null, v: null, pIn: null, pOut: null, n: null, mostrar: null },
+    { no: "2", masa: "", tension: "", corriente: "", tiempo: "", f: null, v: null, pIn: null, pOut: null, n: null, mostrar: null },
+    { no: "3", masa: "", tension: "", corriente: "", tiempo: "", f: null, v: null, pIn: null, pOut: null, n: null, mostrar: null },
   ]);
+  const [mostrarGrafica, setMostrarGrafica] = useState(false);
+  const [alertas, setAlertas] = useState<AlertaType[]>([]);
 
   const handleChange = (
     index: number,
-    campo: keyof Formulario,
+    campo: keyof Experimental,
     value: string
   ) => {
     const updated = [...formularios];
@@ -102,6 +143,107 @@ export default function ModeloMatematicoPage() {
     updated[index].pOut = pOut.toString();
     updated[index].n = n.toString();
     setFormularios(updated);
+  };
+
+  const mergeTeoricoExperimental = (
+    teorico: Teorico[],
+    experimental: Experimental[]
+  ): Resultado[] => {
+    const teoricoMap: Record<number, Omit<Resultado, "nE" | "pInE" | "pOutE" | "masaOriginal">> = {};
+    teorico.forEach(t => {
+      teoricoMap[t.kg] = {
+        masa: t.kg,
+        nT: t.n,
+        pInT: pIn,
+        pOutT: t.p_out,
+      };
+    });
+
+    const resultado: Resultado[] = [];
+    const jitterStep = 0.0001;
+
+    const groupedExperimental: Record<number, Experimental[]> = {};
+    experimental.filter(
+      (e) =>
+        e.f !== null &&
+        e.v !== null &&
+        e.pIn !== null &&
+        e.pOut !== null &&
+        e.n !== null
+    ).forEach((e, i) => {
+      const masaNum = Number(e.masa);
+      if (!groupedExperimental[masaNum]) groupedExperimental[masaNum] = [];
+      groupedExperimental[masaNum].push(e);
+    });
+
+    Object.keys(groupedExperimental).forEach((key) => {
+      const masaNum = Number(key);
+      const grupo = groupedExperimental[masaNum];
+      const baseTeorico = teoricoMap[masaNum];
+
+      const n = grupo.length;
+      grupo.forEach((e, i) => {
+        const offset = (i - (n - 1) / 2) * jitterStep;
+
+        resultado.push({
+          masa: (baseTeorico ? baseTeorico.masa : masaNum) + offset,
+          nT: baseTeorico?.nT,
+          pInT: baseTeorico?.pInT,
+          pOutT: baseTeorico?.pOutT,
+          nE: Number(e.n),
+          pInE: Number(e.pIn),
+          pOutE: Number(e.pOut),
+          color: randomColor(),
+          escenario: Number(e.no)
+        });
+      });
+    });
+
+    console.log("antes", resultado);
+
+    teorico.forEach(t => {
+      if (!experimental.some(e => Number(e.masa) === t.kg)) {
+        resultado.push({
+          masa: t.kg,
+          nT: t.n,
+          pInT: pIn,
+          pOutT: t.p_out,
+        });
+      }
+    });
+
+    resultado.sort((a, b) => a.masa - b.masa);
+
+    console.log(resultado);
+
+    return resultado;
+  };
+
+  const randomColor = (): string => `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")}`;
+
+  const toggleGrafica = () => {
+    const puedeMostrarGrafica = formularios.some(
+      (form) =>
+        form.f !== null &&
+        form.v !== null &&
+        form.pIn !== null &&
+        form.pOut !== null &&
+        form.n !== null
+    );
+    if (puedeMostrarGrafica) {
+      setMostrarGrafica(!mostrarGrafica);
+    } else {
+      const nuevaAlerta: AlertaType = {
+        id: Date.now(), // id único
+        mensaje: "Debe al menos realizar un escenario experimental",
+        tipo: "error",
+      };
+      setAlertas([...alertas, nuevaAlerta]);
+    }
+  };
+
+  const eliminarAlerta = (id: number) => {
+    setAlertas(alertas.filter((a) => a.id !== id));
   };
 
   return (
@@ -348,469 +490,469 @@ export default function ModeloMatematicoPage() {
           </div >
         </div >
       )}
-      {tab === 2 && (
-        <div key={2}>
-          <h2 className="text-xl md:text-2xl font-semibold text-gray-800 mb-6 text-center">
-            Sistema de Izaje con Motorreductor y Engranajes
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6 items-center">
-            <div className="text-gray-700 text-justify text-sm md:text-base">
-              <p className="mb-2">
-                Una torre grúa a escala utiliza un motorreductor N20 de 300 rpm y torque nominal de 1.5 kg·cm,
-                el cual transmite movimiento mediante un sistema de engranajes 72/16, con una relación de
-                transmisión total de 4.5:1. El engranaje grande está unido al tambor de izaje,
-                cuyo radio es de 0,02m, sobre el cual se enrolla la cuerda encargada de elevar la carga.
-              </p>
-              <p className="mb-2">
-                El sistema es alimentado por una batería de 9V y su función es elevar masas de 100g, 200g y 300g a una altura fija de 0,5m.
-                Usando esta configuración mecánica, determine para cada masa:
-              </p>
-              <ul className="list-inside list-decimal text-sm">
-                <li>La fuerza requerida para el izaje.</li>
-                <li>El trabajo mecánico realizado al elevar la carga.</li>
-                <li>La velocidad angular del tambor y la velocidad lineal de elevación.</li>
-                <li>La potencia mecánica de salida del sistema.</li>
-                <li>El torque requerido en el tambor y el torque equivalente en el eje del motor.</li>
-                <li>La potencia eléctrica de entrada, asumiendo un rendimiento del motor del 30%.</li>
-                <li>La eficiencia teórica del sistema</li>
-              </ul>
-            </div>
-            <img
-              src="/ejemplo_teorico.jpg"
-              alt="Ejemplo Teorico"
-              className="rounded-xl shadow-md w-full h-auto object-contain"
-            />
+      {/* {tab === 2 && ( */}
+      <div key={2} style={{ display: tab === 2 ? "block" : "none" }}>
+        <h2 className="text-xl md:text-2xl font-semibold text-gray-800 mb-6 text-center">
+          Sistema de Izaje con Motorreductor y Engranajes
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6 items-center">
+          <div className="text-gray-700 text-justify text-sm md:text-base">
+            <p className="mb-2">
+              Una torre grúa a escala utiliza un motorreductor N20 de 300 rpm y torque nominal de 1.5 kg·cm,
+              el cual transmite movimiento mediante un sistema de engranajes 72/16, con una relación de
+              transmisión total de 4.5:1. El engranaje grande está unido al tambor de izaje,
+              cuyo radio es de 0,02m, sobre el cual se enrolla la cuerda encargada de elevar la carga.
+            </p>
+            <p className="mb-2">
+              El sistema es alimentado por una batería de 9V y su función es elevar masas de 100g, 200g y 300g a una altura fija de 0,4m.
+              Usando esta configuración mecánica, determine para cada masa:
+            </p>
+            <ul className="list-inside list-decimal text-sm">
+              <li>La fuerza requerida para el izaje.</li>
+              <li>El trabajo mecánico realizado al elevar la carga.</li>
+              <li>La velocidad angular del tambor y la velocidad lineal de elevación.</li>
+              <li>La potencia mecánica de salida del sistema.</li>
+              <li>El torque requerido en el tambor y el torque equivalente en el eje del motor.</li>
+              <li>La potencia eléctrica de entrada, asumiendo un rendimiento del motor del 30%.</li>
+              <li>La eficiencia teórica del sistema</li>
+            </ul>
           </div>
-          <h2 className="text-lg md:text-xl font-semibold text-gray-900 bg-gray-100 rounded-md p-1 mb-4 text-center">
-            Desarrollo
-          </h2>
-          <div className="space-y-3 mb-4">
-            <div className="p-3 bg-gray-100 rounded-md">
-              <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                1. La fuerza requerida para el izaje
-              </h2>
-              <p className="text-gray-700 text-justify">
-                La fuerza mínima necesaria para elevar una masa es su peso, es decir:
-              </p>
-              <div className="text-gray-700">
-                <BlockMath math="F = mg" />
-              </div>
-              <p className="text-gray-700 text-justify mb-4">
-                Donde:<br></br>
-                <InlineMath math="m" />: Masa (kg)<br></br>
-                <InlineMath math="g" />: {gravedad} <InlineMath math="m/s^2" /> (Gravedad)
-              </p>
-              <p className="text-gray-700 text-justify mb-2">
-                Cálculo para cada masa:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
-                {masas.map((item, i) => {
-                  return (
-                    <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
-                      Masa: <InlineMath math={`${item.g} \\,g = ${item.kg} \\,kg`} />
-                      <Formula
-                        latex={`F_{${item.g}} = ${item.kg} \\cdot ${gravedad}`}
-                        calc="m * g"
-                        vars={{ m: item.kg, g: gravedad }}
-                        decimals={decimals}
-                        unidad="N"
-                        onSave={(valor: any) => {
-                          setMasas(prev => {
-                            const nuevo = [...prev];
-                            nuevo[i] = {
-                              ...nuevo[i],
-                              f: valor,
-                            };
-                            return nuevo;
-                          });
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+          <img
+            src="/ejemplo_teorico.jpg"
+            alt="Ejemplo Teorico"
+            className="rounded-xl shadow-md w-full h-auto object-contain"
+          />
+        </div>
+        <h2 className="text-lg md:text-xl font-semibold text-gray-900 bg-gray-100 rounded-md p-1 mb-4 text-center">
+          Desarrollo
+        </h2>
+        <div className="space-y-3 mb-4">
+          <div className="p-3 bg-gray-100 rounded-md">
+            <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+              1. La fuerza requerida para el izaje
+            </h2>
+            <p className="text-gray-700 text-justify">
+              La fuerza mínima necesaria para elevar una masa es su peso, es decir:
+            </p>
+            <div className="text-gray-700">
+              <BlockMath math="F = mg" />
             </div>
-            <div className="p-3 bg-gray-100 rounded-md">
-              <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                2. El trabajo mecánico realizado al elevar la carga
-              </h2>
-              <p className="text-gray-700 text-justify">
-                El trabajo que realiza el sistema al elevar la carga es:
-              </p>
-              <div className="text-gray-700">
-                <BlockMath math="W = mgh" />
-              </div>
-              <p className="text-gray-700 text-justify mb-4">
-                Donde:<br></br>
-                <InlineMath math="m" />: Masa (kg)<br></br>
-                <InlineMath math="g" />: {gravedad} <InlineMath math="m/s^2" /> (Gravedad) <br></br>
-                <InlineMath math="h" />: {altura} m (Altura)
-              </p>
-              <p className="text-gray-700 text-justify mb-2">
-                Cálculo para cada masa:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
-                {masas.map((item, i) => {
-                  return (
-                    <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
-                      Masa: <InlineMath math={`${item.g} \\,g = ${item.kg} \\,kg`} />
-                      <Formula
-                        latex={`W_{${item.g}} = ${item.kg} \\cdot ${gravedad} \\cdot ${altura}`}
-                        calc="m * g * h"
-                        vars={{ m: item.kg, g: gravedad, h: altura }}
-                        decimals={decimals}
-                        unidad="J"
-                        onSave={(valor: any) => {
-                          setMasas(prev => {
-                            const nuevo = [...prev];
-                            nuevo[i] = {
-                              ...nuevo[i],
-                              wm: valor,
-                            };
-                            return nuevo;
-                          });
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="p-3 bg-gray-100 rounded-md">
-              <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                3. La velocidad angular del tambor y la velocidad lineal de elevación
-              </h2>
-              <h2 className="text-sm md:text-base font-semibold text-gray-800 mb-4">
-                3.1. Velocidad angular del motor
-              </h2>
-              <div className="text-gray-700">
-                <BlockMath math="\omega_{m} = n_{m} \cdot \frac{2\pi}{60}" />
-              </div>
-              <p className="text-gray-700 text-justify mb-4">
-                Donde:<br></br>
-                <InlineMath math="n_{m}" />: {vnm} rpm (Revoluciones por minuto del motor)
-              </p>
-              <p className="text-gray-700 text-justify mb-2">
-                Convertimos {vnm} rpm → rad/s:
-              </p>
-              <div className="text-gray-700">
-                <Formula
-                  latex={`\\omega_{m} = ${vnm} \\cdot \\frac{2\\pi}{60}`}
-                  calc="vnm * ((pi * 2)/60)"
-                  vars={{ vnm: vnm }}
-                  decimals={decimals}
-                  unidad="rad/s"
-                  onSave={setWm}
-                />
-              </div>
-              <h2 className="text-sm md:text-base font-semibold text-gray-800 mb-4">
-                3.2. Velocidad angular del tambor
-              </h2>
-              <div className="text-gray-700">
-                <BlockMath math="\omega_{t} = \frac{\omega_{m}}{R}" />
-              </div>
-              <p className="text-gray-700 text-justify mb-4">
-                Donde:<br></br>
-                <InlineMath math="\omega_{m}" />: Velocidad angular del motor<br></br>
-                <InlineMath math="R" />: {R} (Relación de engranajes 72/16)
-              </p>
-              <div className="p-4 bg-gray-200 rounded-xl text-gray-700 mb-4">
-                <Formula
-                  latex={`\\omega_{t} = \\frac{${wm}}{${R}}`}
-                  calc="wm / R"
-                  vars={{ wm: wm, R: R }}
-                  decimals={decimals}
-                  unidad="rad/s"
-                  onSave={setWt}
-                />
-              </div>
-              <h2 className="text-sm md:text-base font-semibold text-gray-800 mb-4">
-                3.3. Velocidad lineal de elevación
-              </h2>
-              <div className="text-gray-700">
-                <BlockMath math="v = \omega_{tambor} \cdot r" />
-              </div>
-              <p className="text-gray-700 text-justify mb-4">
-                Donde:<br></br>
-                <InlineMath math="\omega_{tambor}" />: Velocidad angular del tambor<br></br>
-                <InlineMath math="r" />: {rt} m (Radio del tambor)
-              </p>
-              <div className="p-4 bg-gray-200 rounded-xl text-gray-700">
-                <Formula
-                  latex={`v = ${wt} \\cdot ${rt}`}
-                  calc="wt * r"
-                  vars={{ wt: wt, r: rt }}
-                  decimals={decimals}
-                  unidad="m/s"
-                  onSave={setV}
-                />
-              </div>
-            </div>
-            <div className="p-3 bg-gray-100 rounded-md">
-              <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                4. La potencia mecánica de salida del sistema
-              </h2>
-              <p className="text-gray-700 text-justify">
-                La fórmula más utilizada para potencia mecánica en sistemas de izaje es:
-              </p>
-              <div className="text-gray-700">
-                <BlockMath math="P_{salida} = Fv" />
-              </div>
-              <p className="text-gray-700 text-justify mb-4">
-                Donde:<br></br>
-                <InlineMath math="F" />: Fuerza necesaria para elevar la carga<br></br>
-                <InlineMath math="v" />: {v} m/s (Velocidad lineal con la que sale la carga)
-              </p>
-              <p className="text-gray-700 text-justify mb-2">
-                Cálculo para cada fuerza:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
-                {masas.map((item, i) => {
-                  return (
-                    <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
-                      Fuerza: <InlineMath math={`${item.g} \\,g \\rightarrow ${item.f} \\,N`} />
-                      <Formula
-                        latex={`P_{salida} = ${item.f} \\cdot ${v}`}
-                        calc="f * v"
-                        vars={{ f: item.f, v: v }}
-                        decimals={decimals}
-                        unidad="W"
-                        onSave={(valor: any) => {
-                          setMasas(prev => {
-                            const nuevo = [...prev];
-                            nuevo[i] = {
-                              ...nuevo[i],
-                              p_out: valor,
-                            };
-                            return nuevo;
-                          });
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="p-3 bg-gray-100 rounded-md">
-              <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                5. El torque requerido en el tambor y el torque equivalente en el eje del motor
-              </h2>
-              <p className="text-gray-700 text-justify mb-4">
-                Para determinar el torque necesario para elevar la carga se calculan: El torque en el tambor y el torque equivalente que debe entregar el motor
-              </p>
-              <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                5.1. Torque en el tambor
-              </h2>
-              <div className="text-gray-700">
-                <BlockMath math="\tau_{t} = Fr" />
-              </div>
-              <p className="text-gray-700 text-justify mb-4">
-                Donde:<br></br>
-                <InlineMath math="F" />: Fuerza necesaria para elevar la carga<br></br>
-                <InlineMath math="r" />: {rt} m (Radio del tambor)
-              </p>
-              <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                5.2. Torque equivalente en el motor
-              </h2>
-              <p className="text-gray-700 text-justify">
-                Cuando hay reducción (relación 4.5:1):
-              </p>
-              <div className="text-gray-700">
-                <BlockMath math="\tau_{m} = \frac{\tau_{t}}{R}" />
-              </div>
-              <p className="text-gray-700 text-justify mb-4">
-                Donde:<br></br>
-                <InlineMath math="R" />: {R} (Relación de engranajes 72/16)
-              </p>
-              <p className="text-gray-700 text-justify mb-2">
-                Cálculo para cada fuerza:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
-                {masas.map((item, i) => {
-                  return (
-                    <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
-                      Fuerza: <InlineMath math={`${item.g} \\,g \\rightarrow ${item.f} \\,N`} />
-                      <Formula
-                        latex={`\\tau_{t} = ${item.f} \\cdot ${rt}`}
-                        calc="f * r"
-                        vars={{ f: item.f, r: rt }}
-                        decimals={decimals}
-                        unidad="N\cdot m"
-                        onSave={(valor: any) => {
-                          setMasas(prev => {
-                            const nuevo = [...prev];
-                            nuevo[i] = {
-                              ...nuevo[i],
-                              tau_t: valor,
-                            };
-                            return nuevo;
-                          });
-                        }}
-                      />
-                      <Formula
-                        latex={`\\tau_{m} = \\frac{${item.tau_t}}{${R}}`}
-                        calc="tau_t / R"
-                        vars={{ tau_t: item.tau_t, R: R }}
-                        decimals={decimals}
-                        unidad="N\cdot m"
-                        onSave={(valor: any) => {
-                          setMasas(prev => {
-                            const nuevo = [...prev];
-                            nuevo[i] = {
-                              ...nuevo[i],
-                              tau_m: valor,
-                            };
-                            return nuevo;
-                          });
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="p-3 bg-gray-100 rounded-md">
-              <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                6. La potencia eléctrica de entrada, asumiendo un rendimiento del motor del 30%
-              </h2>
-              <p className="text-gray-700 text-justify mb-4">
-                Asumiendo rendimiento del motor {rmp}% = {rm}
-              </p>
-              <div className="text-gray-700">
-                <BlockMath math="P_{in} = \frac{P_{out}}{\eta}" />
-              </div>
-              <p className="text-gray-700 text-justify mb-4">
-                Donde:<br></br>
-                <InlineMath math="P_{out}" />: Potencia mecánica de salida<br></br>
-                <InlineMath math="\eta" />: {rm} (Rendimiento del motor)
-              </p>
-              <p className="text-gray-700 text-justify mb-2">
-                Cálculo para cada potencia de salida:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
-                {masas.map((item, i) => {
-                  return (
-                    <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
-                      Potencia de salida: <InlineMath math={`${item.g} \\,g \\rightarrow ${item.p_out} \\,N`} />
-                      <Formula
-                        latex={`P_{in} = \\frac{${item.p_out}}{${rm}}`}
-                        calc="p_out / rm"
-                        vars={{ p_out: item.p_out, rm: rm }}
-                        decimals={decimals}
-                        unidad="W"
-                        onSave={(valor: any) => {
-                          setMasas(prev => {
-                            const nuevo = [...prev];
-                            nuevo[i] = {
-                              ...nuevo[i],
-                              p_in_30: valor,
-                            };
-                            return nuevo;
-                          });
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="p-3 bg-gray-100 rounded-md">
-              <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                7. La eficiencia teórica del sistema
-              </h2>
-              <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                7.1. Potencia de entrada
-              </h2>
-              <p className="text-gray-700 text-justify mb-4">
-                Es la energía eléctrica que consume el motor durante el izaje, determinada por:
-              </p>
-              <div className="text-gray-700">
-                <BlockMath math="P_{in} = V \cdot I" />
-              </div>
-              <p className="text-gray-700 text-justify mb-4">
-                Donde:<br></br>
-                <InlineMath math="V" />: {V} (Voltaje)<br></br>
-                <InlineMath math="I" />: {I} (Corriente bajo carga)
-              </p>
-              <div className="text-gray-700">
-                <Formula
-                  latex={`P_{in} = ${V} \\cdot ${I}`}
-                  calc="V * I"
-                  vars={{ V: V, I: I }}
-                  decimals={decimals}
-                  unidad="W"
-                  onSave={setPIn}
-                />
-              </div>
-              <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
-                7.2. Eficiencia teórica del sistema
-              </h2>
-              <div className="text-gray-700">
-                <BlockMath math="\eta = \frac{P_{out}}{P_{in}}" />
-              </div>
-              <p className="text-gray-700 text-justify mb-4">
-                Donde:<br></br>
-                <InlineMath math="P_{out}" />: Potencia mecánica de salida<br></br>
-                <InlineMath math="P_{in}" />: {pIn} W (Potencia de entrada)
-              </p>
-              <p className="text-gray-700 text-justify mb-2">
-                Cálculo para cada potencia de salida:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
-                {masas.map((item, i) => {
-                  return (
-                    <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
-                      Potencia de salida: <InlineMath math={`${item.g} \\,g \\rightarrow ${item.p_out} \\,N`} />
-                      <Formula
-                        latex={`\\eta = \\frac{${item.p_out}}{${pIn}}`}
-                        calc="p_out / p_in"
-                        vars={{ p_out: item.p_out, p_in: pIn }}
-                        decimals={decimals}
-                        unidad="\%"
-                        onSave={(valor: any) => {
-                          setMasas(prev => {
-                            const nuevo = [...prev];
-                            nuevo[i] = {
-                              ...nuevo[i],
-                              p_in: valor,
-                            };
-                            return nuevo;
-                          });
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-          <h2 className="text-lg md:text-xl font-semibold text-gray-900 bg-gray-100 rounded-md p-1 mb-4 text-center">
-            Gráficas
-          </h2>
-          <div className="mb-4">
-            <LineChart
-              style={{ width: '100%', aspectRatio: 1.618, maxWidth: '100%' }}
-              responsive
-              data={masas}
-              margin={{ top: 20, right: 20, bottom: 20, left: 10 }}
-            >
-              <CartesianGrid stroke="#8f8f8f" strokeDasharray="4 4" />
-              <Line type="monotone" dataKey="p_in" stroke="#1e2939" strokeWidth={2} />
-              <XAxis dataKey="kg" type="number" ticks={[0].concat(masas.map((m, i) => m.kg))} label={{ value: 'Carga (Kg)', position: 'insideBottom', offset: -10, fill: "#374151", fontWeight: 600, fontSize: 18 }} tick={{ fill: "#374151" }} />
-              <YAxis width="auto" label={{ value: 'Eficiencia (%)', position: 'insideLeft', angle: -90, dy: 50, fill: "#374151", fontWeight: 600, fontSize: 18 }} />
-              <Tooltip content={({ active, payload, label }) => {
-                if (!active || !payload || payload.length === 0) return null;
+            <p className="text-gray-700 text-justify mb-4">
+              Donde:<br></br>
+              <InlineMath math="m" />: Masa (kg)<br></br>
+              <InlineMath math="g" />: {gravedad} <InlineMath math="m/s^2" /> (Gravedad)
+            </p>
+            <p className="text-gray-700 text-justify mb-2">
+              Cálculo para cada masa:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
+              {masas.map((item, i) => {
                 return (
-                  <div className="bg-white p-2 rounded-md shadow-md border border-gray-200">
-                    <p className="text-gray-700 font-semibold">Carga: {label} kg</p>
-                    <p className="text-gray-700">Eficiencia: {payload[0].value} %</p>
+                  <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
+                    Masa: <InlineMath math={`${item.g} \\,g = ${item.kg} \\,kg`} />
+                    <Formula
+                      latex={`F_{${item.g}} = ${item.kg} \\cdot ${gravedad}`}
+                      calc="m * g"
+                      vars={{ m: item.kg, g: gravedad }}
+                      decimals={decimals}
+                      unidad="N"
+                      onSave={(valor: any) => {
+                        setMasas(prev => {
+                          const nuevo = [...prev];
+                          nuevo[i] = {
+                            ...nuevo[i],
+                            f: valor,
+                          };
+                          return nuevo;
+                        });
+                      }}
+                    />
                   </div>
                 );
-              }} />
-            </LineChart>
+              })}
+            </div>
+          </div>
+          <div className="p-3 bg-gray-100 rounded-md">
+            <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+              2. El trabajo mecánico realizado al elevar la carga
+            </h2>
+            <p className="text-gray-700 text-justify">
+              El trabajo que realiza el sistema al elevar la carga es:
+            </p>
+            <div className="text-gray-700">
+              <BlockMath math="W = mgh" />
+            </div>
+            <p className="text-gray-700 text-justify mb-4">
+              Donde:<br></br>
+              <InlineMath math="m" />: Masa (kg)<br></br>
+              <InlineMath math="g" />: {gravedad} <InlineMath math="m/s^2" /> (Gravedad) <br></br>
+              <InlineMath math="h" />: {altura} m (Altura)
+            </p>
+            <p className="text-gray-700 text-justify mb-2">
+              Cálculo para cada masa:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
+              {masas.map((item, i) => {
+                return (
+                  <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
+                    Masa: <InlineMath math={`${item.g} \\,g = ${item.kg} \\,kg`} />
+                    <Formula
+                      latex={`W_{${item.g}} = ${item.kg} \\cdot ${gravedad} \\cdot ${altura}`}
+                      calc="m * g * h"
+                      vars={{ m: item.kg, g: gravedad, h: altura }}
+                      decimals={decimals}
+                      unidad="J"
+                      onSave={(valor: any) => {
+                        setMasas(prev => {
+                          const nuevo = [...prev];
+                          nuevo[i] = {
+                            ...nuevo[i],
+                            wm: valor,
+                          };
+                          return nuevo;
+                        });
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="p-3 bg-gray-100 rounded-md">
+            <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+              3. La velocidad angular del tambor y la velocidad lineal de elevación
+            </h2>
+            <h2 className="text-sm md:text-base font-semibold text-gray-800 mb-4">
+              3.1. Velocidad angular del motor
+            </h2>
+            <div className="text-gray-700">
+              <BlockMath math="\omega_{m} = n_{m} \cdot \frac{2\pi}{60}" />
+            </div>
+            <p className="text-gray-700 text-justify mb-4">
+              Donde:<br></br>
+              <InlineMath math="n_{m}" />: {vnm} rpm (Revoluciones por minuto del motor)
+            </p>
+            <p className="text-gray-700 text-justify mb-2">
+              Convertimos {vnm} rpm → rad/s:
+            </p>
+            <div className="text-gray-700">
+              <Formula
+                latex={`\\omega_{m} = ${vnm} \\cdot \\frac{2\\pi}{60}`}
+                calc="vnm * ((pi * 2)/60)"
+                vars={{ vnm: vnm }}
+                decimals={decimals}
+                unidad="rad/s"
+                onSave={setWm}
+              />
+            </div>
+            <h2 className="text-sm md:text-base font-semibold text-gray-800 mb-4">
+              3.2. Velocidad angular del tambor
+            </h2>
+            <div className="text-gray-700">
+              <BlockMath math="\omega_{t} = \frac{\omega_{m}}{R}" />
+            </div>
+            <p className="text-gray-700 text-justify mb-4">
+              Donde:<br></br>
+              <InlineMath math="\omega_{m}" />: Velocidad angular del motor<br></br>
+              <InlineMath math="R" />: {R} (Relación de engranajes 72/16)
+            </p>
+            <div className="p-4 bg-gray-200 rounded-xl text-gray-700 mb-4">
+              <Formula
+                latex={`\\omega_{t} = \\frac{${wm}}{${R}}`}
+                calc="wm / R"
+                vars={{ wm: wm, R: R }}
+                decimals={decimals}
+                unidad="rad/s"
+                onSave={setWt}
+              />
+            </div>
+            <h2 className="text-sm md:text-base font-semibold text-gray-800 mb-4">
+              3.3. Velocidad lineal de elevación
+            </h2>
+            <div className="text-gray-700">
+              <BlockMath math="v = \omega_{tambor} \cdot r" />
+            </div>
+            <p className="text-gray-700 text-justify mb-4">
+              Donde:<br></br>
+              <InlineMath math="\omega_{tambor}" />: Velocidad angular del tambor<br></br>
+              <InlineMath math="r" />: {rt} m (Radio del tambor)
+            </p>
+            <div className="p-4 bg-gray-200 rounded-xl text-gray-700">
+              <Formula
+                latex={`v = ${wt} \\cdot ${rt}`}
+                calc="wt * r"
+                vars={{ wt: wt, r: rt }}
+                decimals={decimals}
+                unidad="m/s"
+                onSave={setV}
+              />
+            </div>
+          </div>
+          <div className="p-3 bg-gray-100 rounded-md">
+            <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+              4. La potencia mecánica de salida del sistema
+            </h2>
+            <p className="text-gray-700 text-justify">
+              La fórmula más utilizada para potencia mecánica en sistemas de izaje es:
+            </p>
+            <div className="text-gray-700">
+              <BlockMath math="P_{salida} = Fv" />
+            </div>
+            <p className="text-gray-700 text-justify mb-4">
+              Donde:<br></br>
+              <InlineMath math="F" />: Fuerza necesaria para elevar la carga<br></br>
+              <InlineMath math="v" />: {v} m/s (Velocidad lineal con la que sale la carga)
+            </p>
+            <p className="text-gray-700 text-justify mb-2">
+              Cálculo para cada fuerza:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
+              {masas.map((item, i) => {
+                return (
+                  <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
+                    Fuerza: <InlineMath math={`${item.g} \\,g \\rightarrow ${item.f} \\,N`} />
+                    <Formula
+                      latex={`P_{salida} = ${item.f} \\cdot ${v}`}
+                      calc="f * v"
+                      vars={{ f: item.f, v: v }}
+                      decimals={decimals}
+                      unidad="W"
+                      onSave={(valor: any) => {
+                        setMasas(prev => {
+                          const nuevo = [...prev];
+                          nuevo[i] = {
+                            ...nuevo[i],
+                            p_out: valor,
+                          };
+                          return nuevo;
+                        });
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="p-3 bg-gray-100 rounded-md">
+            <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+              5. El torque requerido en el tambor y el torque equivalente en el eje del motor
+            </h2>
+            <p className="text-gray-700 text-justify mb-4">
+              Para determinar el torque necesario para elevar la carga se calculan: El torque en el tambor y el torque equivalente que debe entregar el motor
+            </p>
+            <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+              5.1. Torque en el tambor
+            </h2>
+            <div className="text-gray-700">
+              <BlockMath math="\tau_{t} = Fr" />
+            </div>
+            <p className="text-gray-700 text-justify mb-4">
+              Donde:<br></br>
+              <InlineMath math="F" />: Fuerza necesaria para elevar la carga<br></br>
+              <InlineMath math="r" />: {rt} m (Radio del tambor)
+            </p>
+            <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+              5.2. Torque equivalente en el motor
+            </h2>
+            <p className="text-gray-700 text-justify">
+              Cuando hay reducción (relación 4.5:1):
+            </p>
+            <div className="text-gray-700">
+              <BlockMath math="\tau_{m} = \frac{\tau_{t}}{R}" />
+            </div>
+            <p className="text-gray-700 text-justify mb-4">
+              Donde:<br></br>
+              <InlineMath math="R" />: {R} (Relación de engranajes 72/16)
+            </p>
+            <p className="text-gray-700 text-justify mb-2">
+              Cálculo para cada fuerza:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
+              {masas.map((item, i) => {
+                return (
+                  <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
+                    Fuerza: <InlineMath math={`${item.g} \\,g \\rightarrow ${item.f} \\,N`} />
+                    <Formula
+                      latex={`\\tau_{t} = ${item.f} \\cdot ${rt}`}
+                      calc="f * r"
+                      vars={{ f: item.f, r: rt }}
+                      decimals={decimals}
+                      unidad="N\cdot m"
+                      onSave={(valor: any) => {
+                        setMasas(prev => {
+                          const nuevo = [...prev];
+                          nuevo[i] = {
+                            ...nuevo[i],
+                            tau_t: valor,
+                          };
+                          return nuevo;
+                        });
+                      }}
+                    />
+                    <Formula
+                      latex={`\\tau_{m} = \\frac{${item.tau_t}}{${R}}`}
+                      calc="tau_t / R"
+                      vars={{ tau_t: item.tau_t, R: R }}
+                      decimals={decimals}
+                      unidad="N\cdot m"
+                      onSave={(valor: any) => {
+                        setMasas(prev => {
+                          const nuevo = [...prev];
+                          nuevo[i] = {
+                            ...nuevo[i],
+                            tau_m: valor,
+                          };
+                          return nuevo;
+                        });
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="p-3 bg-gray-100 rounded-md">
+            <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+              6. La potencia eléctrica de entrada, asumiendo un rendimiento del motor del 30%
+            </h2>
+            <p className="text-gray-700 text-justify mb-4">
+              Asumiendo rendimiento del motor {rmp}% = {rm}
+            </p>
+            <div className="text-gray-700">
+              <BlockMath math="P_{in} = \frac{P_{out}}{\eta}" />
+            </div>
+            <p className="text-gray-700 text-justify mb-4">
+              Donde:<br></br>
+              <InlineMath math="P_{out}" />: Potencia mecánica de salida<br></br>
+              <InlineMath math="\eta" />: {rm} (Rendimiento del motor)
+            </p>
+            <p className="text-gray-700 text-justify mb-2">
+              Cálculo para cada potencia de salida:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
+              {masas.map((item, i) => {
+                return (
+                  <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
+                    Potencia de salida: <InlineMath math={`${item.g} \\,g \\rightarrow ${item.p_out} \\,N`} />
+                    <Formula
+                      latex={`P_{in} = \\frac{${item.p_out}}{${rm}}`}
+                      calc="p_out / rm"
+                      vars={{ p_out: item.p_out, rm: rm }}
+                      decimals={decimals}
+                      unidad="W"
+                      onSave={(valor: any) => {
+                        setMasas(prev => {
+                          const nuevo = [...prev];
+                          nuevo[i] = {
+                            ...nuevo[i],
+                            p_in_30: valor,
+                          };
+                          return nuevo;
+                        });
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="p-3 bg-gray-100 rounded-md">
+            <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+              7. La eficiencia teórica del sistema
+            </h2>
+            <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+              7.1. Potencia de entrada
+            </h2>
+            <p className="text-gray-700 text-justify mb-4">
+              Es la energía eléctrica que consume el motor durante el izaje, determinada por:
+            </p>
+            <div className="text-gray-700">
+              <BlockMath math="P_{in} = V \cdot I" />
+            </div>
+            <p className="text-gray-700 text-justify mb-4">
+              Donde:<br></br>
+              <InlineMath math="V" />: {V} (Voltaje)<br></br>
+              <InlineMath math="I" />: {I} (Corriente bajo carga)
+            </p>
+            <div className="text-gray-700">
+              <Formula
+                latex={`P_{in} = ${V} \\cdot ${I}`}
+                calc="V * I"
+                vars={{ V: V, I: I }}
+                decimals={decimals}
+                unidad="W"
+                onSave={setPIn}
+              />
+            </div>
+            <h2 className="text-base md:text-lg font-semibold text-gray-800 mb-4">
+              7.2. Eficiencia teórica del sistema
+            </h2>
+            <div className="text-gray-700">
+              <BlockMath math="\eta = \frac{P_{out}}{P_{in}}" />
+            </div>
+            <p className="text-gray-700 text-justify mb-4">
+              Donde:<br></br>
+              <InlineMath math="P_{out}" />: Potencia mecánica de salida<br></br>
+              <InlineMath math="P_{in}" />: {pIn} W (Potencia de entrada)
+            </p>
+            <p className="text-gray-700 text-justify mb-2">
+              Cálculo para cada potencia de salida:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
+              {masas.map((item, i) => {
+                return (
+                  <div key={i} className="p-4 bg-gray-200 rounded-xl text-gray-700">
+                    Potencia de salida: <InlineMath math={`${item.g} \\,g \\rightarrow ${item.p_out} \\,N`} />
+                    <Formula
+                      latex={`\\eta = \\frac{${item.p_out}}{${pIn}}`}
+                      calc="p_out / p_in"
+                      vars={{ p_out: item.p_out, p_in: pIn }}
+                      decimals={decimals}
+                      unidad="\%"
+                      onSave={(valor: any) => {
+                        setMasas(prev => {
+                          const nuevo = [...prev];
+                          nuevo[i] = {
+                            ...nuevo[i],
+                            n: valor,
+                          };
+                          return nuevo;
+                        });
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
-      )}
+        <h2 className="text-lg md:text-xl font-semibold text-gray-900 bg-gray-100 rounded-md p-1 mb-4 text-center">
+          Gráficas
+        </h2>
+        <div className="mb-4 flex justify-center">
+          <LineChart
+            style={{ width: '100%', aspectRatio: 1.618, maxWidth: '70vh' }}
+            responsive
+            data={masas}
+            margin={{ top: 20, right: 20, bottom: 20, left: 10 }}
+          >
+            <CartesianGrid stroke="#8f8f8f" strokeDasharray="4 4" />
+            <Line type="monotone" dataKey="n" stroke="#1e2939" strokeWidth={2} />
+            <XAxis dataKey="kg" type="number" ticks={[0].concat(masas.map((m, i) => m.kg))} label={{ value: 'Carga (Kg)', position: 'insideBottom', offset: -10, fill: "#374151", fontWeight: 600, fontSize: 18 }} tick={{ fill: "#374151" }} />
+            <YAxis width="auto" label={{ value: 'Eficiencia (%)', position: 'insideLeft', angle: -90, dy: 50, fill: "#374151", fontWeight: 600, fontSize: 18 }} />
+            <Tooltip content={({ active, payload, label }) => {
+              if (!active || !payload || payload.length === 0) return null;
+              return (
+                <div className="bg-white p-2 rounded-md shadow-md border border-gray-200">
+                  <p className="text-gray-700 font-semibold">Carga: {label} kg</p>
+                  <p className="text-gray-700">Eficiencia: {payload[0].value} %</p>
+                </div>
+              );
+            }} />
+          </LineChart>
+        </div>
+      </div>
+      {/* )} */}
       {tab === 3 && (
         <div key={3}>
           <h2 className="text-xl md:text-2xl font-semibold text-gray-800 mb-6 text-center">
@@ -834,7 +976,7 @@ export default function ModeloMatematicoPage() {
                 cuyo radio es de 0,02m, sobre el cual se enrolla la cuerda encargada de elevar la carga.
               </p>
               <p className="mb-2">
-                El sistema es alimentado por una batería de 9V y su función es elevar masas de 100g, 200g y 300g a una altura fija de 0,5m.
+                El sistema es alimentado por una batería de 9V y su función es elevar masas de 100g, 200g y 300g a una altura fija de 0,4m.
                 Usando esta configuración mecánica, determine para cada masa:
               </p>
               <ul className="list-inside list-decimal text-sm">
@@ -849,7 +991,7 @@ export default function ModeloMatematicoPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-4">
             {formularios.map((form, col) => (
               <div key={col} className="border border-gray-600 rounded-xl shadow p-4 bg-white space-y-4">
-                <h2 className="text-xl font-bold text-center text-gray-800">Escenario {col + 1}</h2>
+                <h2 className="text-xl font-bold text-center text-gray-800">Escenario {form.no}</h2>
                 <div>
                   <label className="block text-base md:text-lg text-gray-700">Masa</label>
                   <select value={form.masa} onChange={(e) => handleChange(col, "masa", e.target.value)} className="w-full border border-gray-300 rounded p-2 bg-gray-100 text-gray-700">
@@ -861,15 +1003,30 @@ export default function ModeloMatematicoPage() {
                 </div>
                 <div>
                   <label className="block font-medium text-gray-700">Tensión</label>
-                  <input type="number" value={form.tension} min={0} onChange={(e) => handleChange(col, "tension", e.target.value)} className="w-full border border-gray-300 rounded p-2 bg-gray-100 text-gray-700" />
+                  <div className="flex items-center border border-gray-300 rounded bg-gray-100">
+                    <input type="number" value={form.tension} min={0} onChange={(e) => handleChange(col, "tension", e.target.value)} className="w-full p-2 bg-gray-100 text-gray-700 outline-none" />
+                    <span className="px-3 py-2 text-gray-600 border-l border-gray-300">
+                      V
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <label className="block font-medium text-gray-700">Corriente</label>
-                  <input type="number" value={form.corriente} min={0} onChange={(e) => handleChange(col, "corriente", e.target.value)} className="w-full border border-gray-300 rounded p-2 bg-gray-100 text-gray-700" />
+                  <div className="flex items-center border border-gray-300 rounded bg-gray-100">
+                    <input type="number" value={form.corriente} min={0} onChange={(e) => handleChange(col, "corriente", e.target.value)} className="w-full p-2 bg-gray-100 text-gray-700 outline-none" />
+                    <span className="px-3 py-2 text-gray-600 border-l border-gray-300">
+                      A
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <label className="block font-medium text-gray-700">Tiempo</label>
-                  <input type="number" value={form.tiempo} min={0} onChange={(e) => handleChange(col, "tiempo", e.target.value)} className="w-full border border-gray-300 rounded p-2 bg-gray-100 text-gray-700" />
+                  <div className="flex items-center border border-gray-300 rounded bg-gray-100">
+                    <input type="number" value={form.tiempo} min={0} onChange={(e) => handleChange(col, "tiempo", e.target.value)} className="w-full p-2 bg-gray-100 text-gray-700 outline-none" />
+                    <span className="px-3 py-2 text-gray-600 border-l border-gray-300">
+                      s
+                    </span>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-2 pt-2">
                   <button className="py-2 bg-gray-800 text-white rounded-lg" onClick={() => handleCalcular(col)}>
@@ -967,6 +1124,193 @@ export default function ModeloMatematicoPage() {
                 )}
               </div>
             ))}
+          </div>
+          <div>
+            <div className="fixed top-6 space-y-2">
+              {alertas.map((a) => (
+                <Alerta key={a.id} mensaje={a.mensaje} tipo={a.tipo} onClose={() => eliminarAlerta(a.id)} />
+              ))}
+            </div>
+            <button
+              onClick={toggleGrafica}
+              className="w-full mb-6 px-6 py-2 bg-gray-800 hover:bg-gray-900 transition-colors rounded-lg shadow-lg text-white font-semibold"
+            >
+              {mostrarGrafica ? "Ocultar Gráficas" : "Mostrar Gráficas"}
+            </button>
+            {mostrarGrafica &&
+              <div>
+                <h2 className="text-lg md:text-xl font-semibold text-gray-900 bg-gray-100 rounded-md p-1 mb-4 text-center">
+                  Gráficas
+                </h2>
+                <div className="flex gap-6 mb-8 border rounded-lg p-2 overflow-x-auto">
+                  {[
+                    { id: 1, label: "Eficiencia vs Carga" },
+                    { id: 2, label: "Potencia Salida - Potencia Entrada vs Carga" }
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setTabChart(t.id)}
+                      className={`pb-1 whitespace-nowrap ${tabChart === t.id
+                        ? "text-gray-900 border-b-2 border-black font-semibold"
+                        : "text-gray-500"
+                        }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                {tabChart === 1 && (
+                  <div key={1}>
+                    <div className="mb-4 flex justify-center">
+                      <LineChart
+                        style={{ width: '100%', aspectRatio: 1.618, maxWidth: '70vh' }}
+                        responsive
+                        data={mergeTeoricoExperimental(masas, formularios)}
+                        margin={{ top: 20, right: 20, bottom: 20, left: 10 }}
+                      >
+                        <CartesianGrid stroke="#8f8f8f" strokeDasharray="4 4" />
+                        <XAxis dataKey="masa" type="number" ticks={[0].concat(masas.map((m, i) => m.kg))} label={{ value: 'Carga (Kg)', position: 'insideBottom', offset: -10, fill: "#374151", fontWeight: 600, fontSize: 18 }} tick={{ fill: "#374151" }} />
+                        <YAxis width="auto" label={{ value: 'Eficiencia (%)', position: 'insideLeft', angle: -90, dy: 50, fill: "#374151", fontWeight: 600, fontSize: 18 }} />
+                        <Tooltip content={({ active, payload, label }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const teorico = payload.find(p => p.dataKey === "nT");
+                          const experimental = payload.find(p => p.dataKey === "nE");
+
+                          return (
+                            <div className="bg-white p-3 border rounded shadow text-gray-700">
+                              {teorico && (
+                                <p>
+                                  <b>Teórico:</b> {teorico.value}%
+                                </p>
+                              )}
+                              {experimental && (
+                                <p>
+                                  <b>Experimental:</b> {experimental.value}%
+                                  {experimental.payload.escenario && ` (Escenario ${experimental.payload.escenario})`}
+                                </p>
+                              )}
+                              <p>
+                                <b>Masa:</b> {experimental ? experimental.payload.masa.toFixed(1) : teorico.payload.masa.toFixed(1)} g
+                              </p>
+                            </div>
+                          );
+                        }} />
+                        <Legend verticalAlign="top" wrapperStyle={{ top: -10 }} />
+                        <Line
+                          type="monotone"
+                          dataKey="nT"
+                          stroke="#2563eb"
+                          strokeWidth={2}
+                          dot={{ r: 5 }}
+                          name="Teórico"
+                          connectNulls
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="nE"
+                          stroke="#f97316"
+                          strokeWidth={2}
+                          name="Experimental"
+                          connectNulls
+                          dot={(props) => {
+                            const { cx, cy, payload } = props;
+                            if (cx == null || cy == null) {
+                              return <g />;
+                            }
+                            return (
+                              <svg x={cx - 10} y={cy - 10} width={20} height={20} fill={payload.color} viewBox="0 0 20 20">
+                                <path d={"M 10,4 A 6,6 0 1,0 10,16 A 6,6 0 1,0 10,4"}
+                                />
+                              </svg>
+                            );
+                          }}
+                        />
+                      </LineChart>
+                    </div>
+                  </div>
+                )}
+                {tabChart === 2 && (
+                  <div key={2}>
+                    <div className="mb-4 flex justify-center">
+                      <LineChart
+                        style={{ width: '100%', aspectRatio: 1.618, maxWidth: '70vh' }}
+                        responsive
+                        data={mergeTeoricoExperimental(masas, formularios)}
+                        margin={{ top: 20, right: 20, bottom: 20, left: 10 }}
+                      >
+                        <CartesianGrid stroke="#8f8f8f" strokeDasharray="4 4" />
+                        <XAxis dataKey="masa" type="number" ticks={[0].concat(masas.map((m, i) => m.kg))} label={{ value: 'Carga (Kg)', position: 'insideBottom', offset: -10, fill: "#374151", fontWeight: 600, fontSize: 18 }} tick={{ fill: "#374151" }} />
+                        <YAxis width="auto" label={{ value: 'Potencia (W)', position: 'insideLeft', angle: -90, dy: 50, fill: "#374151", fontWeight: 600, fontSize: 18 }} />
+                        <Tooltip content={({ active, payload, label }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const teorico = payload.find(p => p.dataKey === "pInT" || p.dataKey === "pOutT");
+                          const experimental = payload.find(p => p.dataKey === "pInE" || p.dataKey === "pOutE");
+
+                          return (
+                            <div className="bg-white p-3 border rounded shadow text-gray-700">
+                              {/* {teorico && (
+                                <p>
+                                  <b>Teórico:</b> {teorico.value}%
+                                </p>
+                              )} */}
+                              {experimental && (
+                                <p>
+                                  <b>Experimental:</b> {experimental.value}%
+                                  {experimental.payload.escenario && ` (Escenario ${experimental.payload.escenario})`}
+                                </p>
+                              )}
+                              <p>
+                                <b>Masa:</b> {experimental ? experimental.payload.masa.toFixed(1) : teorico.payload.masa.toFixed(1)} g
+                              </p>
+                            </div>
+                          );
+                        }} />
+                        <Legend verticalAlign="top" wrapperStyle={{ top: -10 }} />
+                        <Line
+                          type="monotone"
+                          dataKey="pInE"
+                          stroke="#2563eb"
+                          strokeWidth={2}
+                          name="Potencia Entrada"
+                          connectNulls
+                          dot={(props) => {
+                            const { cx, cy, payload } = props;
+                            if (cx == null || cy == null) {
+                              return <g />;
+                            }
+                            return (
+                              <svg x={cx - 10} y={cy - 10} width={20} height={20} fill={payload.color} viewBox="0 0 20 20">
+                                <path d={"M 10,4 A 6,6 0 1,0 10,16 A 6,6 0 1,0 10,4"}
+                                />
+                              </svg>
+                            );
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="pOutE"
+                          stroke="#f97316"
+                          strokeWidth={2}
+                          name="Potencia Salida"
+                          connectNulls
+                          dot={(props) => {
+                            const { cx, cy, payload } = props;
+                            if (cx == null || cy == null) {
+                              return <g />;
+                            }
+                            return (
+                              <svg x={cx - 10} y={cy - 10} width={20} height={20} fill={payload.color} viewBox="0 0 20 20">
+                                <path d={"M 10,4 A 6,6 0 1,0 10,16 A 6,6 0 1,0 10,4"}
+                                />
+                              </svg>
+                            );
+                          }}
+                        />
+                      </LineChart>
+                    </div>
+                  </div>
+                )}
+              </div>}
           </div>
         </div>
       )}
