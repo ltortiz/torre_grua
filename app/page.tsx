@@ -55,9 +55,9 @@ export default function HomePage() {
       {/* Imagen central */}
       <div className="w-full flex justify-center">
         <img
-          src="/proyecto.png"
+          src="/proyecto.gif"
           alt="Proyecto"
-          className="rounded-xl shadow-md object-fit w-full max-w-3xl h-64 md:h-120 transition-transform duration-500 hover:scale-[1.02]"
+          className="rounded-xl shadow-md object-fit w-full max-w-3xl h-64 md:h-160 transition-transform duration-500 hover:scale-[1.02]"
         />
       </div>
 

@@ -526,7 +526,7 @@ export default function ModeloMatematicoPage() {
             </ul>
           </div>
           <img
-            src="/teorico.jpg"
+            src="/proyecto.jpg"
             alt="Ejemplo Teorico"
             className="rounded-xl shadow-md w-full h-auto object-contain"
           />
