@@ -1,36 +1,224 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📦 Sistema de Izaje – Modelo Matemático y Experimental
 
-## Getting Started
+Este proyecto permite **analizar, comparar y visualizar** el desempeño de un sistema de izaje mediante dos enfoques:
 
-First, run the development server:
+- **Modelo Teórico (Diseño Ideal)**
+- **Modelo Experimental (Datos Reales)**
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+El software ofrece un menú principal desde el cual se accede a ambos modelos y a la comparación gráfica entre ellos.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📘 Contexto del Proyecto
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+El objetivo principal es **determinar y comparar la eficiencia** de un sistema de izaje (tipo torre grúa) bajo diferentes condiciones de carga.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Para esto se contrasta:
 
-## Learn More
+- Un **modelo matemático teórico**, basado en el diseño mecánico ideal.
+- Un **modelo experimental**, construido a partir de mediciones reales tomadas bajo tres escenarios de carga.
 
-To learn more about Next.js, take a look at the following resources:
+### ⚙️ Descripción del Sistema Físico
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+La torre grúa emplea:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Motorreductor N20
+  - 300 rpm
+  - Torque nominal: **1.5 kg·cm**
 
-## Deploy on Vercel
+- Sistema de engranajes **72/16**
+  - Relación total: **4.5 : 1**
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Tambor de izaje
+  - Radio: **0,02 m**
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Alimentación: **Batería de 9 V**
+
+El sistema eleva cargas de **100 g**, **200 g** y **300 g** a una altura constante de **0,4 m**.
+
+## 🧮 Variables Calculadas
+
+Para cada escenario experimental el programa determina:
+
+1. **Fuerza requerida para el izaje**
+
+$$
+F = m \cdot g
+$$
+
+2. **Velocidad lineal de elevación**
+
+$$
+v = \frac{altura}{tiempo}
+$$
+
+3. **Potencia eléctrica de entrada**
+
+$$
+P_{in} = V \cdot I
+$$
+
+4. **Potencia mecánica de salida**
+
+$$
+P_{out} = \frac{m \cdot g \cdot altura}{tiempo}
+$$
+
+
+5. **Eficiencia real del sistema**
+
+$$
+\eta = (\frac{P_{out}}{P_{in}}) \cdot 100
+$$
+
+> **Nota:** _Los valores se redondean con 3 decimales._
+
+## 🖥️ Funcionamiento del Programa
+
+El programa presenta **tres formularios**, uno por cada escenario experimental.
+Cada formulario solicita:
+
+- Masa (kg)
+- Tensión (V)
+- Corriente (A)
+- Tiempo (s)
+
+Cada escenario incluye un botón **"Calcular"**, que ejecuta internamente las formulas planteadas anteriormente.
+
+Los resultados se muestran inmediatamente debajo de cada formulario junto con un botón de información donde se puede visualizar la formula aplicada.
+
+## 📊 Gráficas Generadas
+
+El sistema genera dos tipos principales de gráficas (requiere al menos un escenario diligenciado):
+
+1. **Eficiencia vs Carga**
+
+    Compara:
+    - **Modelo Teórico**
+    - **Escenarios Experimentales**
+    
+    Permite visualizar la diferencia entre el comportamiento ideal y el real del sistema.
+
+2. **Potencia de Entrada – Potencia de Salida vs Carga**
+
+    Compara únicamente **los tres escenarios experimentales**.
+
+    Permite evaluar el desempeño energético del sistema según la carga aplicada.
+
+## 📂 Estructura del Proyecto
+
+~~~
+|-- app
+    |-- diseno
+        |-- page.tsx
+    |-- fundamento
+        |-- page.tsx
+    |-- modelo
+        |-- page.tsx
+    |-- favicon.ico
+    |-- globals.css
+    |-- layout.tsx
+    |-- page.tsx
+|-- components
+    |-- modelo
+        |-- Formula.tsx
+        |-- TooltipFormula.tsx
+    |-- Alerta.jsx
+    |-- Header.tsx
+    |-- Navbar.tsx
+|-- public
+    |-- capturas
+        |-- diseno.png
+        |-- eficiencia_carga.png
+        |-- experimentos.png
+        |-- fundamento.png
+        |-- inicio.png
+        |-- modelo_mat.png
+        |-- modelo_mat_experimental.png
+        |-- modelo_mat_teorico.png
+        |-- pOut_pIn_carga.png
+    |-- energia.jpg
+    |-- logo-em.png
+    |-- logo-uts.png
+    |-- plano1.jpg
+    |-- plano2.jpg
+    |-- plano3.jpg
+    |-- plano4.jpg
+    |-- potencia.jpg
+    |-- proyecto.png
+    |-- teorico.jpg
+    |-- trabajo.jpg
+|-- .gitignore
+|-- eslint.config.mjs
+|-- next.config.ts
+|-- next-env.d.ts
+|-- package.json
+|-- package-lock.json
+|-- postcss.config.mjs
+|-- README.md
+|-- tsconfig.json
+~~~
+
+## ▶️ Cómo Ejecutar el Proyecto
+
+1. **Clonar el repositorio**
+    ```bash
+    git clone https://github.com/ltortiz/torre_grua.git
+    cd torre-grua
+    ```
+
+2. **Instalar dependencias**
+    ```bash
+    npm install
+    ```
+
+3. **Ejecutar en modo desarrollo**
+    ```bash
+    npm run dev
+    ```
+
+4. **Abrir en el navegador**
+    
+    [http://localhost:3000](http://localhost:3000)
+
+## 🖼️ Capturas de Pantalla
+
+![Inicio.](/public/capturas/inicio.png)
+**Figura 1. Pantalla de inicio**
+
+![Fundamento.](/public/capturas/fundamento.png)
+**Figura 2. Pantalla de fundamento**
+
+![Modelo Matemático.](/public/capturas/modelo_mat.png)
+**Figura 3. Pantalla de modelo matemático**
+
+![Modelo Matemático Teórico.](/public/capturas/modelo_mat_teorico.png)
+**Figura 4. Pantalla de modelo matemático teórico**
+
+![Modelo Matemático Experimental.](/public/capturas/modelo_mat_experimental.png)
+**Figura 5. Pantalla de modelo matemático experimental**
+
+![Diseño.](/public/capturas/diseno.png)
+**Figura 6. Pantalla de diseño**
+
+### 📌 Ejemplo:
+
+**Formulario de Escenario Experimental**
+
+![Modelo Matemático Experimental Real.](/public/capturas/experimentos.png)
+
+**Gráfica de Eficiencia vs Carga**
+
+![Eficiencia vs Carga.](/public/capturas/eficiencia_carga.png)
+
+**Gráfica de Potencia Salida - Potencia Entrada vs Carga**
+
+![Potencia Salida - Potencia Entrada vs Carga.](/public/capturas/pOut_pIn_carga.png)
+
+## 📄 Licencia
+
+Este proyecto es de código abierto y puede ser utilizado, copiado, modificado
+y distribuido libremente con fines educativos, académicos o personales.
+
+No se otorgan garantías de ningún tipo.  
+El autor no se hace responsable por el uso o mal funcionamiento del software.
+
+Si utiliza este proyecto, se agradece el reconocimiento al autor original.

@@ -130,6 +130,14 @@ export default function ModeloMatematicoPage() {
     const corriente = Number(form.corriente);
     const tiempo = Number(form.tiempo);
 
+    /**
+     * Calculos matemáticos para determinar las variables que influyen en el experimento
+     * f = Fuerza
+     * v = Velocidad
+     * pIn = Potencia de Entrada
+     * pOut = Potencia de Salida
+     * n = Eficiencia
+     */
     const f = Number((masa * gravedad).toFixed(decimals))
     const v = Number((altura / tiempo).toFixed(decimals))
     const pIn = Number((tension * corriente).toFixed(decimals))
@@ -518,7 +526,7 @@ export default function ModeloMatematicoPage() {
             </ul>
           </div>
           <img
-            src="/ejemplo_teorico.jpg"
+            src="/teorico.jpg"
             alt="Ejemplo Teorico"
             className="rounded-xl shadow-md w-full h-auto object-contain"
           />

@@ -13,8 +13,7 @@ export default function Navbar() {
     { name: "Inicio", href: "/" },
     { name: "Fundamento", href: "/fundamento" },
     { name: "Modelo Matemático", href: "/modelo" },
-    { name: "Diseño", href: "/diseno" },
-    // { name: "NPI", href: "/npi" },
+    { name: "Diseño", href: "/diseno" }
   ];
 
   return (
